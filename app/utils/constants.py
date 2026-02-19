@@ -1,0 +1,3 @@
+MAX_FILE_SIZE = 50 * 1024 * 1024
+WCE_COLLEGE_ID = "c9413cdd-97a9-423a-8c1b-3b507a60d580"
+ALLOWED_RESOURCE_TYPES = ["notes", "assignment", "pyq"]
