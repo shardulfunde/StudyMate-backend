@@ -46,3 +46,4 @@ langchain-text-splitters
 langchain-cohere
 python-pptx 
 python-docx
+gunicorn
