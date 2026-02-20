@@ -6,6 +6,7 @@ celery = Celery(
 )
 
 
+
 celery.conf.update(
     include=["app.tasks.embedding"]
 )
