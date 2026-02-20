@@ -5,18 +5,34 @@ from app.core import config
 from app.api.v1 import me  
 from app.api.v1 import create_embedding
 from app.api.v1 import ai_test   # whatever you named the file
-
-
-
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from fastapi.responses import JSONResponse
+from fastapi import Request
+from app.core.limiter import limiter
 
 app = FastAPI()
 
+app.state.limiter = limiter
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+app.add_middleware(SlowAPIMiddleware)
+
+@app.exception_handler(RateLimitExceeded)
+def rate_limit_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Try again later."},
+    )
 
 app.include_router(core.router)
 app.include_router(resources.router)
