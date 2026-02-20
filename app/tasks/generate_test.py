@@ -19,21 +19,17 @@ def generate_random_resource_test(
     request: TestGenerationRequest,
 ):
     
-    user = db.query(User).filter(User.id==user.id).filter()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="User not found")
-    
     if request.scope_type == "random_resource":
         random_chunk = get_random_chunks_from_topic(db, request.scope_id)
 
     elif request.scope_type == "random_subject":
         random_chunk = get_random_chunks_from_subject(db, request.scope_id)
     
-
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="scope_type must be 'resource' or 'subject'")
 
-    if not random_chunk:raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No study material found")
+    if not random_chunk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No study material found")
 
     parser = PydanticOutputParser(pydantic_object=TestGenerationResponse)
 
@@ -93,7 +89,6 @@ def generate_relevant_test(
     request: TestGenerationRequest,
 ):
 
-    user = db.query(User).filter(User.id == user.id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="User not found")
     if not request.query:

@@ -1,6 +1,7 @@
 from pydantic import BaseModel,Field
 from typing import List
 from app.schemas.mcq_test_generation import TestGenerationResponse
+from app.schemas.theory_test_generation import FinalTheoryResponse
 
 class StudentAnswer(BaseModel):
     question_index: int
@@ -19,4 +20,23 @@ class TestAnalysisResponse(BaseModel):
     
 class TestAnalysisRequest(BaseModel):
     test:TestGenerationResponse = Field(...,description="Detailed test schema")
-    student_answer:StudentAnswer = Field(...,description="Question number and answer choosen by student")
+    student_answer:List[StudentAnswer] = Field(...,description="Question number and answer choosen by student")
+    
+    
+class TheoryStudentAnswer(BaseModel):
+    question_index:int = Field(...,description="The index of question")
+    student_answer:str = Field(...,description="The answer of student at particular index")   
+    
+class TheoryTestAnalysisRequest(BaseModel):
+    theory_test:FinalTheoryResponse = Field(...,description="Theory Test")
+    student_answer:List[TheoryStudentAnswer] = Field(...,description="Answer by student")
+
+class TheoryQuestionEvaluation(BaseModel):
+    question_index: int = Field(...,description="The index of the question")
+    feedback: str = Field(...,description="The feedback of the test")
+    marks_awarded: int = Field(...,description="Marks awarded out of total marks")
+
+class TheoryTestAnalysis(BaseModel):
+    question_evaluations: List[TheoryQuestionEvaluation]
+    overall_analysis: str = Field(...,description="Overall analysis of the test")
+    
