@@ -20,7 +20,8 @@ app.state.limiter = limiter
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # local dev
+        "http://localhost:5173",
+        "http://localhost:5174",# local dev
         "https://www.studymateai.tech",
         "https://studymateai.tech",
     ],

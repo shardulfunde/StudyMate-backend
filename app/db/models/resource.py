@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Text, TIMESTAMP, Boolean, String
+from sqlalchemy import Column, Text, TIMESTAMP, Boolean, String,Integer
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
@@ -17,3 +17,5 @@ class Resource(Base):
     uploaded_by = Column(String)
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
+    view_count = Column(Integer, default=0, nullable=False)
+    tests_generated_count = Column(Integer, default=0, nullable=False)

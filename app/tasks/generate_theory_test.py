@@ -1,4 +1,5 @@
 from app.core.deps import get_db,get_current_user
+from app.db.models import User, Resource
 from fastapi import HTTPException,status
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -81,7 +82,17 @@ def generate_random_theory_resource_test(
         "language": request.language,
         "content": random_chunk,
     })
-
+    user.tests_generated_count+=1
+    
+    # 2. Increment the resource's test count (only if generated from a specific resource)
+    if request.scope_type == "random_resource":
+        db.query(Resource).filter(Resource.id == request.scope_id).update(
+            {"tests_generated_count": Resource.tests_generated_count + 1},
+            synchronize_session=False
+        )
+        
+    db.commit()
+    db.commit()
     return FinalTheoryResponse(
         theory_test=result,
         random_chunks=random_chunk
@@ -175,7 +186,15 @@ def generate_relevant_theory_test(
         "content": content,
         "query": request.query,
     })
-
+    user.tests_generated_count += 1
+    # 2. Increment the resource's test count (only if generated from a specific resource)
+    if request.scope_type == "relevant_resource":
+        db.query(Resource).filter(Resource.id == request.scope_id).update(
+            {"tests_generated_count": Resource.tests_generated_count + 1},
+            synchronize_session=False
+        )
+        
+    db.commit()
     return FinalTheoryResponse(
         theory_test=result,
         random_chunks=content

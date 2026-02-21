@@ -1,4 +1,5 @@
 from app.core.deps import get_db,get_current_user
+from app.db.models.resource import Resource
 from fastapi import HTTPException,status
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -78,7 +79,13 @@ def generate_random_resource_test(
         "language": request.language,
         "content": random_chunk,
     })
-
+    user.tests_generated_count+=1
+    
+    if request.scope_type == "random_resource":
+        db.query(Resource).filter(Resource.id == request.scope_id).update(
+            {"tests_generated_count": Resource.tests_generated_count + 1},
+            synchronize_session=False
+        )
     return result
 
 
@@ -143,6 +150,15 @@ def generate_relevant_test(
 
     chain = prompt | model | parser
 
+    user.tests_generated_count += 1
+
+    if request.scope_type == "relevant_resource":
+        db.query(Resource).filter(Resource.id == request.scope_id).update(
+            {"tests_generated_count": Resource.tests_generated_count + 1},
+            synchronize_session=False
+        )
+        
+    db.commit()
     return chain.invoke({
         "number_of_questions": request.number_of_questions,
         "difficulty": request.difficulty,

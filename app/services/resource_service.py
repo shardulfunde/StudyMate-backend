@@ -137,7 +137,14 @@ def view_resource(db: Session, current_user: User, resource_id: str):
         Params=params,
         ExpiresIn=300,
     )
+    current_user.resources_viewed_count+=1
+    db.query(Resource).filter(Resource.id == resource_id).update(
+        {"view_count": Resource.view_count + 1},
+        synchronize_session=False
+    )
+    
 
+    db.commit()
     return {
         "url": view_url,
         "mode": disposition,
