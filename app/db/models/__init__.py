@@ -6,6 +6,7 @@ from app.db.models.subject import Subject
 from app.db.models.admin_scope import AdminScope
 from app.db.models.resource import Resource
 from app.db.models.role_assignment import RoleAssignment
+from app.db.models.moderator_application import ModeratorApplication
 
 __all__ = [
     "College",
@@ -16,4 +17,5 @@ __all__ = [
     "AdminScope",
     "Resource",
     "RoleAssignment",
+    "ModeratorApplication",
 ]

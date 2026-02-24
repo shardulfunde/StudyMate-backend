@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import core, resources, admin, catalog
+from app.api.v1 import core, resources, admin, catalog, moderator
 from app.core import config
 from app.api.v1 import me  
 from app.api.v1 import create_embedding
@@ -44,6 +44,7 @@ app.include_router(core.router)
 app.include_router(resources.router)
 app.include_router(admin.router)
 app.include_router(catalog.router)
+app.include_router(moderator.router)
 app.include_router(me.router)
 app.include_router(create_embedding.router) 
 app.include_router(ai_test.router)
