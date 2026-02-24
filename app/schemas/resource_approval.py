@@ -1,16 +1,7 @@
 from pydantic import BaseModel, validator
 
 
-class SubjectCreate(BaseModel):
-    year_id: str
-    subject_name: str
-
-
-class SubjectDelete(BaseModel):
-    subject_id: str
-
-
-class SubjectRejectRequest(BaseModel):
+class ResourceRejectRequest(BaseModel):
     rejection_reason: str
 
     @validator("rejection_reason")

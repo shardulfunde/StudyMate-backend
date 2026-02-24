@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timezone
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.db.models import Resource, User, Subject, Year, Program
@@ -9,6 +10,11 @@ from app.utils.s3 import get_s3_client, get_bucket_name
 
 s3 = get_s3_client()
 S3_BUCKET = get_bucket_name()
+
+
+def _ensure_platform_superadmin(current_user: User):
+    if current_user.role != "platform_superadmin":
+        raise HTTPException(status_code=403, detail="Only platform superadmin can manage resource approvals")
 
 
 def validate_resource_type(resource_type: str):
@@ -88,6 +94,7 @@ def confirm_upload(db: Session, current_user: User, subject_id: str, title: str,
         subject_id=subject_id,
         title=title,
         resource_type=resource_type,
+        approval_status="pending",
         embedding_status="pending",
         file_key=permanent_key,
         uploaded_by=current_user.id,
@@ -113,6 +120,9 @@ def view_resource(db: Session, current_user: User, resource_id: str):
     # Only same-college users can view
     if resource.college_id != current_user.college_id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    if resource.approval_status != "approved":
+        raise HTTPException(status_code=403, detail="Resource not approved")
 
     try:
         s3.head_object(Bucket=S3_BUCKET, Key=resource.file_key)
@@ -163,6 +173,7 @@ def list_resources(db: Session, current_user: User, subject_id: str, resource_ty
             Resource.subject_id == subject_id,
             Resource.college_id == current_user.college_id,
             Resource.resource_type == resource_type,
+            Resource.approval_status == "approved",
             Resource.is_active == True,
         )
         .order_by(Resource.created_at.desc())
@@ -179,6 +190,118 @@ def list_resources(db: Session, current_user: User, subject_id: str, resource_ty
         }
         for r in resources
     ]
+
+
+def list_platform_resources(db: Session, current_user: User, status: str = "pending"):
+    _ensure_platform_superadmin(current_user)
+
+    q = (
+        db.query(Resource, User.email)
+        .join(User, Resource.uploaded_by == User.id)
+        .filter(Resource.is_active == True)
+    )
+
+    if status in {"pending", "approved", "rejected"}:
+        q = q.filter(Resource.approval_status == status)
+
+    resources = q.order_by(Resource.created_at.desc()).all()
+
+    return [
+        {
+            "id": str(r.Resource.id),
+            "title": r.Resource.title,
+            "subject_id": str(r.Resource.subject_id),
+            "resource_type": r.Resource.resource_type,
+            "uploaded_by": r.email,
+            "created_at": r.Resource.created_at,
+            "approval_status": r.Resource.approval_status,
+            "rejection_reason": r.Resource.rejection_reason,
+        }
+        for r in resources
+    ]
+
+
+def preview_resource(db: Session, current_user: User, resource_id: str):
+    _ensure_platform_superadmin(current_user)
+
+    resource = db.query(Resource).filter(
+        Resource.id == resource_id,
+        Resource.is_active == True,
+    ).first()
+
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    try:
+        s3.head_object(Bucket=S3_BUCKET, Key=resource.file_key)
+    except Exception:
+        resource.is_active = False
+        db.commit()
+        raise HTTPException(status_code=404, detail="File no longer exists")
+
+    signed_url = s3.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": S3_BUCKET,
+            "Key": resource.file_key,
+        },
+        ExpiresIn=300,
+    )
+
+    return {"preview_url": signed_url}
+
+
+def approve_resource(db: Session, current_user: User, resource_id: str):
+    _ensure_platform_superadmin(current_user)
+
+    resource = db.query(Resource).filter(
+        Resource.id == resource_id,
+        Resource.is_active == True,
+    ).first()
+
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    resource.approval_status = "approved"
+    resource.approved_by = current_user.id
+    resource.approved_at = datetime.now(timezone.utc)
+    resource.rejection_reason = None
+
+    db.commit()
+    db.refresh(resource)
+
+    return {
+        "message": "Resource approved",
+        "resource_id": str(resource.id),
+        "approval_status": resource.approval_status,
+    }
+
+
+def reject_resource(db: Session, current_user: User, resource_id: str, rejection_reason: str):
+    _ensure_platform_superadmin(current_user)
+
+    resource = db.query(Resource).filter(
+        Resource.id == resource_id,
+        Resource.is_active == True,
+    ).first()
+
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    resource.approval_status = "rejected"
+    resource.rejection_reason = rejection_reason
+    resource.approved_by = None
+    resource.approved_at = None
+
+    db.commit()
+    db.refresh(resource)
+
+    return {
+        "message": "Resource rejected",
+        "resource_id": str(resource.id),
+        "approval_status": resource.approval_status,
+    }
+
 
 def delete_resource(db: Session, current_user: User, resource_id: str):
 

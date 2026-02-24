@@ -1,18 +1,13 @@
-from typing import List, Literal
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
 from app.db.models import User
 from app.schemas.moderator_application import (
-    ModeratorApplicationItem,
     ModeratorApplyRequest,
     ModeratorApplyResponse,
     ModeratorDecisionRequest,
-    ModeratorDecisionResponse,
 )
 from app.services import moderator_service
 
@@ -49,9 +44,9 @@ def apply_for_moderator(
     )
 
 
-@router.get("/moderator/applications", response_model=List[ModeratorApplicationItem], status_code=200)
-def get_moderator_applications(
-    status: Literal["pending", "approved", "rejected", "all"] = Query(default="pending"),
+@router.get("/moderator/applications")
+def list_applications(
+    status: str = "pending",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -62,9 +57,9 @@ def get_moderator_applications(
     )
 
 
-@router.post("/moderator/applications/{application_id}/decision", response_model=ModeratorDecisionResponse, status_code=200)
-def review_moderator_application(
-    application_id: UUID,
+@router.post("/moderator/applications/{application_id}/decision")
+def review_application(
+    application_id: str,
     request: ModeratorDecisionRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

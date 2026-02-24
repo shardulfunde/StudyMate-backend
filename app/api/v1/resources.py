@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.deps import get_db, get_current_user
 from app.db.models import User
+from app.schemas import ResourceRejectRequest
 from app.services import resource_service
 
 router = APIRouter()
@@ -47,6 +48,43 @@ def list_resources(
     db: Session = Depends(get_db)
 ):
     return resource_service.list_resources(db, current_user, subject_id, resource_type)
+
+
+@router.get("/platform/resources")
+def list_platform_resources(
+    status: str = "pending",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return resource_service.list_platform_resources(db, current_user, status)
+
+
+@router.get("/platform/resources/{resource_id}/preview")
+def preview_resource(
+    resource_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return resource_service.preview_resource(db, current_user, resource_id)
+
+
+@router.patch("/platform/resources/{resource_id}/approve")
+def approve_resource(
+    resource_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return resource_service.approve_resource(db, current_user, resource_id)
+
+
+@router.patch("/platform/resources/{resource_id}/reject")
+def reject_resource(
+    resource_id: str,
+    request: ResourceRejectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return resource_service.reject_resource(db, current_user, resource_id, request.rejection_reason)
 
 
 @router.delete("/resource/{resource_id}")

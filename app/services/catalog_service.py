@@ -1,8 +1,14 @@
 import uuid
+from datetime import datetime, timezone
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.db.models import Program, Year, Subject, Resource, User, RoleAssignment
 from app.services import authority_service
+
+
+def _ensure_platform_superadmin(current_user: User):
+    if current_user.role != "platform_superadmin":
+        raise HTTPException(status_code=403, detail="Only platform superadmin can manage subject approvals")
 
 
 # ============================================================
@@ -35,6 +41,29 @@ def get_years(db: Session, current_user: User, program_id: str = None):
             "program_name": y.program.name if y.program else None,
         }
         for y in years
+    ]
+
+
+def list_platform_subjects(db: Session, current_user: User, status: str = "pending"):
+    _ensure_platform_superadmin(current_user)
+
+    q = db.query(Subject)
+    if status in {"pending", "approved", "rejected"}:
+        q = q.filter(Subject.approval_status == status)
+
+    subjects = q.order_by(Subject.created_at.desc()).all()
+
+    return [
+        {
+            "id": str(s.id),
+            "name": s.name,
+            "year_id": str(s.year_id) if s.year_id else None,
+            "college_id": str(s.college_id) if s.college_id else None,
+            "created_at": s.created_at,
+            "approval_status": s.approval_status,
+            "rejection_reason": s.rejection_reason,
+        }
+        for s in subjects
     ]
 
 
@@ -121,6 +150,7 @@ def create_subject(db: Session, current_user: User, year_id: str, subject_name: 
         name=subject_name,
         year_id=year_id,
         college_id=year.college_id,
+        approval_status="pending",
     )
 
     db.add(new_subject)
@@ -264,3 +294,49 @@ def delete_subject(db: Session, current_user: User, subject_id: str):
     except:
         db.rollback()
         raise
+
+
+def approve_subject(db: Session, current_user: User, subject_id: str):
+    _ensure_platform_superadmin(current_user)
+
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    subject.approval_status = "approved"
+    subject.approved_by = current_user.id
+    subject.approved_at = datetime.now(timezone.utc)
+    subject.rejection_reason = None
+
+    db.commit()
+    db.refresh(subject)
+
+    return {
+        "message": "Subject approved",
+        "subject_id": str(subject.id),
+        "approval_status": subject.approval_status,
+    }
+
+
+def reject_subject(db: Session, current_user: User, subject_id: str, rejection_reason: str):
+    _ensure_platform_superadmin(current_user)
+
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    subject.approval_status = "rejected"
+    subject.rejection_reason = rejection_reason
+    subject.approved_by = None
+    subject.approved_at = None
+
+    db.commit()
+    db.refresh(subject)
+
+    return {
+        "message": "Subject rejected",
+        "subject_id": str(subject.id),
+        "approval_status": subject.approval_status,
+    }

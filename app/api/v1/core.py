@@ -53,7 +53,8 @@ def get_users(current_user: User = Depends(get_current_user), db: Session = Depe
 @router.get("/subjects")
 def get_subjects(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     subjects = db.query(Subject).filter(
-        Subject.college_id == current_user.college_id
+        Subject.college_id == current_user.college_id,
+        Subject.approval_status == "approved",
     ).all()
 
     return [

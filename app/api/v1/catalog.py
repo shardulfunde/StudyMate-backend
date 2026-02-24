@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.deps import get_db, get_current_user
-from app.schemas import ProgramCreate, YearCreate, SubjectCreate, ProgramDelete, SubjectDelete,YearDelete
+from app.schemas import ProgramCreate, YearCreate, SubjectCreate, ProgramDelete, SubjectDelete,YearDelete, SubjectRejectRequest
 from app.services import catalog_service
 from app.db.models import User
 
@@ -20,6 +20,15 @@ def get_years(
     db: Session = Depends(get_db)
 ):
     return catalog_service.get_years(db, current_user, program_id)
+
+
+@router.get("/platform/subjects")
+def list_platform_subjects(
+    status: str = "pending",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return catalog_service.list_platform_subjects(db, current_user, status)
 
 
 @router.post("/create-program")
@@ -47,6 +56,25 @@ def create_subject(
     db: Session = Depends(get_db)
 ):
     return catalog_service.create_subject(db, current_user, request.year_id, request.subject_name)
+
+
+@router.patch("/platform/subjects/{subject_id}/approve")
+def approve_subject(
+    subject_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return catalog_service.approve_subject(db, current_user, subject_id)
+
+
+@router.patch("/platform/subjects/{subject_id}/reject")
+def reject_subject(
+    subject_id: str,
+    request: SubjectRejectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return catalog_service.reject_subject(db, current_user, subject_id, request.rejection_reason)
 
 
 @router.delete("/delete-program")

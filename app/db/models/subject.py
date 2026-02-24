@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Text, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, Text, TIMESTAMP, ForeignKey, String
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -12,6 +12,10 @@ class Subject(Base):
     year_id = Column(UUID(as_uuid=True), ForeignKey("years.id"))
     college_id = Column(UUID(as_uuid=True), ForeignKey("colleges.id"))
     name = Column(Text, nullable=False)
+    approval_status = Column(Text, nullable=False, default="pending", server_default="pending")
+    approved_by = Column(String, nullable=True)
+    approved_at = Column(TIMESTAMP, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     year = relationship("Year")
