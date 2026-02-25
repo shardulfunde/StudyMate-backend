@@ -21,6 +21,26 @@ def validate_resource_type(resource_type: str):
     if resource_type not in ALLOWED_RESOURCE_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid resource_type. Allowed: {', '.join(ALLOWED_RESOURCE_TYPES)}")
 
+def _can_delete_notes(db: Session, current_user: User, resource: Resource) -> bool:
+    if str(resource.uploaded_by) == str(current_user.id):
+        return True
+
+    if current_user.role == "platform_superadmin":
+        return True
+
+    subject = db.query(Subject).filter(Subject.id == resource.subject_id).first()
+    if not subject:
+        return False
+
+    year = db.query(Year).filter(Year.id == subject.year_id).first()
+    if not year:
+        return False
+
+    return (
+        authority_service.has_scoped_role(db, current_user, "program_admin", "program", year.program_id)
+        or authority_service.has_scoped_role(db, current_user, "college_superadmin", "college", subject.college_id)
+    )
+
 
 def generate_upload_url(db: Session, current_user: User, subject_id: str, resource_type: str, filename: str):
     validate_resource_type(resource_type)
@@ -315,12 +335,19 @@ def delete_resource(db: Session, current_user: User, resource_id: str):
     if resource.college_id != current_user.college_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    if not authority_service.can_manage_subject_resources(
-        db,
-        current_user,
-        resource.subject_id
-    ):
-        raise HTTPException(status_code=403, detail="Not allowed")
+    if resource.resource_type == "notes":
+        if not _can_delete_notes(db, current_user, resource):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the owner or program admin and above can delete notes",
+            )
+    else:
+        if not authority_service.can_manage_subject_resources(
+            db,
+            current_user,
+            resource.subject_id
+        ):
+            raise HTTPException(status_code=403, detail="Not allowed")
 
     try:
         from app.db.models.resource_embedding import ResourceEmbedding
