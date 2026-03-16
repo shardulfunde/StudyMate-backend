@@ -9,7 +9,7 @@ from app.schemas.theory_test_generation import TheoryTestResponse,TheoryTestGene
 from app.tasks.get_embeddings import get_random_chunks_from_subject,get_random_chunks_from_topic,get_relevant_chunks_for_test,get_relevant_chunks_for_subject
 from sqlalchemy.orm import Session
 
-model = ChatCerebras(model="gpt-oss-120b")
+model = ChatCerebras(model="qwen-3-235b-a22b-instruct-2507")
 
 def generate_random_theory_resource_test(
     db: Session,

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-model = ChatCerebras(model="gpt-oss-120b")
+model = ChatCerebras(model="qwen-3-235b-a22b-instruct-2507")
 
 def get_test_analysis(
     db: Session,
