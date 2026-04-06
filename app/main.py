@@ -5,6 +5,7 @@ from app.core import config
 from app.api.v1 import me  
 from app.api.v1 import create_embedding
 from app.api.v1 import ai_test   # whatever you named the file
+from app.api.v1 import survey
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -48,3 +49,4 @@ app.include_router(moderator.router)
 app.include_router(me.router)
 app.include_router(create_embedding.router) 
 app.include_router(ai_test.router)
+app.include_router(survey.router)
