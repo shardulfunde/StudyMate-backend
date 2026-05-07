@@ -3,13 +3,13 @@ from app.db.models.resource import Resource
 from fastapi import HTTPException,status
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_cerebras import ChatCerebras
+from langchain_openai import ChatOpenAI
 from app.db.models.user import User
 from app.schemas.mcq_test_generation import TestGenerationRequest,TestGenerationResponse
 from app.tasks.get_embeddings import get_random_chunks_from_subject,get_random_chunks_from_topic,get_relevant_chunks_for_test,get_relevant_chunks_for_subject
 from sqlalchemy.orm import Session
 
-model = ChatCerebras(model="qwen-3-235b-a22b-instruct-2507")
+model = ChatOpenAI(model="gpt-5-nano")
 
 
 

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from langchain_cerebras import ChatCerebras
+from langchain_openai import ChatOpenAI
 from fastapi import HTTPException,status
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-model = ChatCerebras(model="qwen-3-235b-a22b-instruct-2507")
+model = ChatOpenAI(model="gpt-5-nano")
 
 def get_test_analysis(
     db: Session,
