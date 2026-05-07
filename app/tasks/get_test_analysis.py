@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-model = ChatOpenAI(model="gpt-5-nano")
+model = ChatOpenAI(model="gpt-4o-mini")
 
 def get_test_analysis(
     db: Session,

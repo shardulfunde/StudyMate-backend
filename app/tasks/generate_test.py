@@ -9,7 +9,7 @@ from app.schemas.mcq_test_generation import TestGenerationRequest,TestGeneration
 from app.tasks.get_embeddings import get_random_chunks_from_subject,get_random_chunks_from_topic,get_relevant_chunks_for_test,get_relevant_chunks_for_subject
 from sqlalchemy.orm import Session
 
-model = ChatOpenAI(model="gpt-5-nano")
+model = ChatOpenAI(model="gpt-4o-mini")
 
 
 
