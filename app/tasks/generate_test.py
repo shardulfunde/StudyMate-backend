@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 
 model = ChatOpenAI(model="gpt-4o-mini")
 
+from fastapi.responses import StreamingResponse
+from langchain_core.output_parsers import StrOutputParser
 
-
-#Lets stream this response(Nah streaming is too defficult I gave up)
 def generate_random_resource_test(
     db: Session,
     user: User,
@@ -22,17 +22,13 @@ def generate_random_resource_test(
     
     if request.scope_type == "random_resource":
         random_chunk = get_random_chunks_from_topic(db, request.scope_id)
-
     elif request.scope_type == "random_subject":
         random_chunk = get_random_chunks_from_subject(db, request.scope_id)
-    
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="scope_type must be 'resource' or 'subject'")
 
     if not random_chunk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No study material found")
-
-    parser = PydanticOutputParser(pydantic_object=TestGenerationResponse)
 
     prompt = PromptTemplate(
         template="""
@@ -43,50 +39,51 @@ def generate_random_resource_test(
         Rules:
         - Use ONLY given content.
         - No hallucination.
-        - No markdown.
+        - No markdown formatting (no ```json).
         - No extra text.
         - Exactly 4 options.
         - One correct answer.
         - Difficulty: {difficulty}
         - Language: {language}
 
-        Difficulty Guide:
-        - easy → recall
-        - medium → understanding
-        - hard → analytical reasoning
+        QUESTION QUALITY GUIDELINES:
+        - NEVER ask trivial, direct definition questions (e.g., "What is X?", "Define Y").
+        - Questions MUST be analytical, conceptual, or application-based.
+        - Create scenario-based questions, "Which of the following...", or "Why does..." type questions.
+        - Options must be plausible distractors, not obvious throwaways.
+
+        OUTPUT FORMAT: JSON-Lines (NDJSON)
+        You must output EXACTLY {number_of_questions} lines.
+        Every single line must be a valid JSON object with the following structure:
+        {{"question_text": "string", "options": ["string", "string", "string", "string"], "correct_answer": 0, "explanation": "string"}}
+        Do NOT wrap the output in a JSON array [ ].
 
         Study Material:
         {content}
-
-        {format_instructions}
         """,
-        input_variables=[
-            "number_of_questions",
-            "difficulty",
-            "language",
-            "content",
-        ],
-        partial_variables={
-            "format_instructions": parser.get_format_instructions()
-        },
+        input_variables=["number_of_questions", "difficulty", "language", "content"],
     )
 
-    chain = prompt | model | parser
+    chain = prompt | model | StrOutputParser()
     
-    result = chain.invoke({
-        "number_of_questions": request.number_of_questions,
-        "difficulty": request.difficulty,
-        "language": request.language,
-        "content": random_chunk,
-    })
-    user.tests_generated_count+=1
-    
+    user.tests_generated_count += 1
     if request.scope_type == "random_resource":
         db.query(Resource).filter(Resource.id == request.scope_id).update(
             {"tests_generated_count": Resource.tests_generated_count + 1},
             synchronize_session=False
         )
-    return result
+    db.commit()
+
+    def stream_generator():
+        for chunk in chain.stream({
+            "number_of_questions": request.number_of_questions,
+            "difficulty": request.difficulty,
+            "language": request.language,
+            "content": random_chunk,
+        }):
+            yield chunk
+
+    return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
 
 
 #Generated different function for this because the model must know the query
@@ -103,67 +100,70 @@ def generate_relevant_test(
 
     if request.scope_type == "relevant_resource":
         content = get_relevant_chunks_for_test(db,request.scope_id,request.query)
-
     elif request.scope_type == "relevant_subject":
         content = get_relevant_chunks_for_subject(db,request.scope_id,request.query)
-
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="scope_type must be 'relevant_resource' or 'relevant_subject'")
 
     if not content:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No relevant study material found")
 
-    parser = PydanticOutputParser(pydantic_object=TestGenerationResponse)
-
     prompt = PromptTemplate(
         template="""
-            You are StudyMate.
+        You are StudyMate.
 
-            Generate {number_of_questions} MCQs strictly focused on this topic:
-            "{query}"
+        Generate {number_of_questions} MCQs strictly focused on this topic:
+        "{query}"
 
-            All questions must directly relate to the query.
+        All questions must directly relate to the query.
 
-            Rules:
-            - Use ONLY given content.
-            - No hallucination.
-            - Exactly 4 options.
-            - One correct answer.
-            - Difficulty: {difficulty}
-            - Language: {language}
-            - No markdown.
-            - No extra text.
+        Rules:
+        - Use ONLY given content.
+        - No hallucination.
+        - Exactly 4 options.
+        - One correct answer.
+        - Difficulty: {difficulty}
+        - Language: {language}
+        - No markdown formatting (no ```json).
+        - No extra text.
 
-            Study Material:
-            {content}
+        QUESTION QUALITY GUIDELINES:
+        - NEVER ask trivial, direct definition questions (e.g., "What is X?", "Define Y").
+        - Questions MUST be analytical, conceptual, or application-based.
+        - Create scenario-based questions, "Which of the following...", or "Why does..." type questions.
+        - Options must be plausible distractors, not obvious throwaways.
 
-            {format_instructions}
-            """,
-        input_variables=[
-            "number_of_questions",
-            "difficulty",
-            "language",
-            "content",
-            "query"],
-        partial_variables={"format_instructions": parser.get_format_instructions()},
+        OUTPUT FORMAT: JSON-Lines (NDJSON)
+        You must output EXACTLY {number_of_questions} lines.
+        Every single line must be a valid JSON object with the following structure:
+        {{"question_text": "string", "options": ["string", "string", "string", "string"], "correct_answer": 0, "explanation": "string"}}
+        Do NOT wrap the output in a JSON array [ ].
+
+        Study Material:
+        {content}
+        """,
+        input_variables=["number_of_questions", "difficulty", "language", "content", "query"],
     )
 
-    chain = prompt | model | parser
+    chain = prompt | model | StrOutputParser()
 
     user.tests_generated_count += 1
-
     if request.scope_type == "relevant_resource":
         db.query(Resource).filter(Resource.id == request.scope_id).update(
             {"tests_generated_count": Resource.tests_generated_count + 1},
             synchronize_session=False
         )
-        
     db.commit()
-    return chain.invoke({
-        "number_of_questions": request.number_of_questions,
-        "difficulty": request.difficulty,
-        "language": request.language,
-        "content": content,
-        "query": request.query,
-    })
+
+    def stream_generator():
+        for chunk in chain.stream({
+            "number_of_questions": request.number_of_questions,
+            "difficulty": request.difficulty,
+            "language": request.language,
+            "content": content,
+            "query": request.query,
+        }):
+            yield chunk
+
+    return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
 

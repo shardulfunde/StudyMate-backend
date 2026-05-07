@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 
 model = ChatOpenAI(model="gpt-4o-mini")
 
+from fastapi.responses import StreamingResponse
+from langchain_core.output_parsers import StrOutputParser
+
 def generate_random_theory_resource_test(
     db: Session,
     user: User,
@@ -21,16 +24,14 @@ def generate_random_theory_resource_test(
     
     if request.scope_type == "random_resource":
         random_chunk = get_random_chunks_from_topic(db, request.scope_id)
-
     elif request.scope_type == "random_subject":
         random_chunk = get_random_chunks_from_subject(db, request.scope_id)
-    
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="scope_type must be 'resource' or 'subject'")
 
-    if not random_chunk:raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No study material found")
+    if not random_chunk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No study material found")
 
-    parser = PydanticOutputParser(pydantic_object=TheoryTestResponse)
     prompt = PromptTemplate(
         template="""
     You are StudyMate, a precise academic theory test generator.
@@ -46,57 +47,51 @@ def generate_random_theory_resource_test(
     - Use ONLY the provided study material.
     - Do NOT use outside knowledge.
     - Do NOT hallucinate.
-    - No markdown.
-    - No explanations.
-    - Output ONLY valid JSON.
-    - Follow the required schema exactly.
+    - No markdown formatting (no ```json).
+    - No explanations outside the JSON object.
 
-    QUESTION REQUIREMENTS:
+    OUTPUT FORMAT: JSON-Lines (NDJSON)
+    You must output EXACTLY {number_of_questions} lines.
+    Every single line must be a valid JSON object with the following structure:
+    {{"marks": 2, "question": "string", "answer": "string", "concept": "string"}}
+    Do NOT wrap the output in a JSON array [ ].
+
+    QUESTION QUALITY GUIDELINES:
+    - NEVER ask trivial, direct definition questions (e.g., "What is soil?", "Define X").
+    - Questions MUST be analytical, conceptual, or application-based.
+    - Use prompts like "How", "Why", "Compare", "Analyze", "Justify", or present a scenario.
     - Difficulty level: {difficulty}
     - Language: {language}
     - Depth must match marks:
-        - 2 marks → short and precise
-        - 3 marks → moderate explanation
-        - 5 marks → detailed structured answer
+        - 2 marks → Provide a reason, compare two concepts briefly, or state the significance (NO basic definitions).
+        - 3 marks → Explain a process, analyze a relationship, or describe a mechanism.
+        - 5 marks → Detailed structured answer requiring multi-step reasoning, scenario analysis, or comprehensive evaluation.
 
     Study Material:
     {content}
-
-    {format_instructions}
     """,
-        input_variables=[
-            "number_of_questions",
-            "difficulty",
-            "language",
-            "content",
-        ],
-        partial_variables={
-            "format_instructions": parser.get_format_instructions()
-        },
+        input_variables=["number_of_questions", "difficulty", "language", "content"],
     )
-    chain = prompt | model | parser
+    chain = prompt | model | StrOutputParser()
     
-    result = chain.invoke({
-        "number_of_questions": request.number_of_questions,
-        "difficulty": request.difficulty,
-        "language": request.language,
-        "content": random_chunk,
-    })
-    user.tests_generated_count+=1
-    
-    # 2. Increment the resource's test count (only if generated from a specific resource)
+    user.tests_generated_count += 1
     if request.scope_type == "random_resource":
         db.query(Resource).filter(Resource.id == request.scope_id).update(
             {"tests_generated_count": Resource.tests_generated_count + 1},
             synchronize_session=False
         )
-        
     db.commit()
-    db.commit()
-    return FinalTheoryResponse(
-        theory_test=result,
-        random_chunks=random_chunk
-    )
+
+    def stream_generator():
+        for chunk in chain.stream({
+            "number_of_questions": request.number_of_questions,
+            "difficulty": request.difficulty,
+            "language": request.language,
+            "content": random_chunk,
+        }):
+            yield chunk
+
+    return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
 
 def generate_relevant_theory_test(
     db: Session,
@@ -108,17 +103,13 @@ def generate_relevant_theory_test(
     
     if request.scope_type == "relevant_resource":
         content = get_relevant_chunks_for_test(db,request.scope_id,request.query)
-
     elif request.scope_type == "relevant_subject":
         content = get_relevant_chunks_for_subject(db,request.scope_id,request.query)
-
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="scope_type must be 'relevant_resource' or 'relevant_subject'")
 
     if not content:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="No relevant study material found")
-
-    parser = PydanticOutputParser(pydantic_object=TheoryTestResponse)
 
     prompt = PromptTemplate(
         template="""
@@ -146,48 +137,39 @@ def generate_relevant_theory_test(
     - Do NOT hallucinate.
     - Ignore portions of study material not related to the query topics.
     - If sufficient content is not available for a topic, reduce its coverage instead of fabricating information.
-    - No markdown.
-    - No explanations.
-    - Output ONLY valid JSON.
-    - Follow the required schema exactly.
+    - No markdown formatting (no ```json).
+    - No explanations outside the JSON object.
 
-    QUESTION REQUIREMENTS:
+    OUTPUT FORMAT: JSON-Lines (NDJSON)
+    You must output EXACTLY {number_of_questions} lines.
+    Every single line must be a valid JSON object with the following structure:
+    {{"marks": 2, "question": "string", "answer": "string", "concept": "string"}}
+    Do NOT wrap the output in a JSON array [ ].
+
+    QUESTION QUALITY GUIDELINES:
+    - NEVER ask trivial, direct definition questions (e.g., "What is soil?", "Define X").
+    - Questions MUST be analytical, conceptual, or application-based.
+    - Use prompts like "How", "Why", "Compare", "Analyze", "Justify", or present a scenario.
     - Difficulty level: {difficulty}
-        - easy → direct recall
-        - medium → conceptual understanding
-        - hard → analytical reasoning (based only on provided material)
+        - easy → conceptual understanding (no direct definitions)
+        - medium → analyze relationships or mechanisms
+        - hard → complex analytical reasoning and scenarios
     - Language: {language}
     - Depth must match marks:
-        - 2 marks → short and precise
-        - 3 marks → moderate explanation
-        - 5 marks → detailed structured answer
+        - 2 marks → Provide a reason, compare two concepts briefly, or state the significance (NO basic definitions).
+        - 3 marks → Explain a process, analyze a relationship, or describe a mechanism.
+        - 5 marks → Detailed structured answer requiring multi-step reasoning, scenario analysis, or comprehensive evaluation.
     - The "concept" field must clearly correspond to one of the query topics.
 
     Study Material:
     {content}
-
-    {format_instructions}
     """,
-        input_variables=[
-            "number_of_questions",
-            "difficulty",
-            "language",
-            "content",
-            "query"],
-        partial_variables={"format_instructions": parser.get_format_instructions()},
+        input_variables=["number_of_questions", "difficulty", "language", "content", "query"],
     )
 
-    chain = prompt | model | parser
+    chain = prompt | model | StrOutputParser()
 
-    result =  chain.invoke({
-        "number_of_questions": request.number_of_questions,
-        "difficulty": request.difficulty,
-        "language": request.language,
-        "content": content,
-        "query": request.query,
-    })
     user.tests_generated_count += 1
-    # 2. Increment the resource's test count (only if generated from a specific resource)
     if request.scope_type == "relevant_resource":
         db.query(Resource).filter(Resource.id == request.scope_id).update(
             {"tests_generated_count": Resource.tests_generated_count + 1},
@@ -195,8 +177,16 @@ def generate_relevant_theory_test(
         )
         
     db.commit()
-    return FinalTheoryResponse(
-        theory_test=result,
-        random_chunks=content
-    )
+
+    def stream_generator():
+        for chunk in chain.stream({
+            "number_of_questions": request.number_of_questions,
+            "difficulty": request.difficulty,
+            "language": request.language,
+            "content": content,
+            "query": request.query,
+        }):
+            yield chunk
+
+    return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
 

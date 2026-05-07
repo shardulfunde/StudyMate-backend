@@ -16,7 +16,7 @@ router = APIRouter(
 )
 
 
-@router.post("/generate", response_model=TestGenerationResponse)
+@router.post("/generate")
 def generate_test(
     request: TestGenerationRequest,
     db: Session = Depends(get_db),
@@ -47,7 +47,7 @@ def analyze_test(request:TestAnalysisRequest,db:Session=Depends(get_db),current_
     return get_test_analysis(db,current_user,request)
 
 
-@router.post("/theorytest/generate",response_model=FinalTheoryResponse)
+@router.post("/theorytest/generate")
 def generate_theory_test(request:TheoryTestGenerationRequest,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     if request.scope_type in ["random_resource", "random_subject"]:
         return generate_random_theory_resource_test(
